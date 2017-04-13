@@ -1,0 +1,12 @@
+/********************
+* File: user_long_running_ops
+*
+* Author: Jesus Sanchez (jsanchez.consultant@gmail.com)
+*
+* Copyright Notice: Creative Commons Attribution-ShareAlike 4.0 International License
+************************************/
+
+select username, sid||','||serial#||'@'||inst_id, time_remaining/60 min_remaining
+from gv$session_longops
+where username = '&user_name'
+and time_remaining > 0;
