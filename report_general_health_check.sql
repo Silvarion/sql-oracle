@@ -1,5 +1,5 @@
 /********************
-* file: report_basic_health_check.sql
+* file: report_general_health_check.sql
 *
 * author: Jesus Sanchez (jsanchez.consultant@gmail.com)
 *
@@ -75,6 +75,21 @@ WHERE NAME IN (
 	FROM v$spparameter
 	WHERE upper(NAME) LIKE ('DB_%_FILE_DEST')
 ) ORDER BY 1;
+PROMPT
+SET heading OFF
+SELECT '========== FRA STORAGE ==========' title FROM dual;
+SET heading ON
+col name format a32
+col QUOTA_GB for 999,999,999
+col USED_GB for 999,999,999
+col PCT_USED for 999
+SELECT name
+, ceil( space_limit / 1024 / 1024 / 1024) QUOTA_GB
+, ceil( space_used  / 1024 / 1024 / 1024) USED_GB
+, decode( nvl( space_used, 0), 0, 0
+, ceil ( ( space_used / space_limit) * 100) ) PCT_USED
+FROM v$recovery_file_dest
+ORDER BY NAME;
 PROMPT
 SET heading OFF
 SELECT '========== SERVICES ==========' title FROM dual;
@@ -166,9 +181,26 @@ FROM dba_2pc_pending
 WHERE state='PREPARED';
 PROMPT
 SET heading OFF
+SELECT '========== PENDING DISTRIBUTED TRANSACTIONS DEATAILS ==========' title FROM dual;
+SET heading ON
+with tran_id as (
+	select local_tran_id
+	from dba_2pc_pending
+	where state='prepared'
+)
+select a.sql_text, s.osuser, s.username
+from v$transaction t, v$session s, v$sqlarea a, tran_id i
+where s.taddr = t.addr
+	and a.address = s.prev_sql_addr
+	and t.xidusn = substr(i.local_tran_id,1,instr(i.local_tran_id,'.')-1)
+	and t.xidslot = substr(i.local_tran_id,(instr(i.local_tran_id,'.')+1),((instr(i.local_tran_id,'.',(instr(i.local_tran_id,'.')+1)))-(instr(i.local_tran_id,'.')+1)))
+	and t.xidsqn = substr(i.local_tran_id,(instr(i.local_tran_id,'.',(instr(i.local_tran_id,'.')+1)))+1,(nvl(nullif(instr(i.local_tran_id,'.',(instr(i.local_tran_id,'.',(instr(i.local_tran_id,'.')+1)))+1),0),length(i.local_tran_id))));
+PROMPT
+SET heading OFF
 SELECT '========== APP/USER SESSIONS ==========' title FROM dual;
 COLUMN "COUNT" format a80
 COLUMN machine format a30
+SET heading ON
 break ON status
 WITH list_view AS (
 	SELECT status, username, osuser, machine, service_name, inst_id, count(1) session_count
@@ -206,7 +238,7 @@ PROMPT
 SET heading OFF
 SELECT '========== OUTDATED STATS OBJECTS ==========' title FROM dual;
 SET heading ON
-COLUMN outdated_stats_objects FORMAT 999,000
+COLUMN outdated_stats_objects FORMAT 999
 SELECT owner, count(table_name) outdated_stats_objects
 FROM dba_tables
 WHERE last_analyzed < SYSDATE - 7
